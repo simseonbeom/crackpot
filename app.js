@@ -43,7 +43,7 @@ const UI = {
     health: "체력", active: "액티브", passive: "패시브", cooldown: "재사용", startWeapon: "시작 무기", unlock: "해금",
     hp: n => `HP ${n}`, ownerOf: "층의 주인", talismans: "부적", talismansSub: "봉인 제단 층 곳곳에 붙어 있는 부적. 주워 던지면 그 자리에서 효과가 터져요.",
     worldSub: "오래전 강력한 존재와 위험한 병기를 봉인하려고 만든 5층짜리 시설.",
-    heroesSub: "처음엔 회수자 한 명. 나머지는 게임 안에서 조건을 채우면 함께해요.",
+    heroesSub: "처음엔 회수자 한 명. 나머지는 게임 안에서 조건을 채우면 함께해요.", heroesSubBase: "봉인 시설로 내려가는 주인공.",
     weaponsSub: "항아리와 상점에서 나오는 무기. 등급이 높을수록 드물어요.",
     itemsSub: "주우면 바로 효과가 붙는 패시브 아이템.",
     synSub: "특정 무기·아이템 둘을 함께 가지면 켜지는 숨은 효과.",
@@ -59,7 +59,7 @@ const UI = {
     npcTitle: "Who you'll meet", roomTitle: "Special rooms without an NPC", where: "Found in",
     floorFeatures: "What's different here", floorMobs: "Monsters", floorBosses: "Floor masters", floorLegend: "No-hit legendary gun", common: "On every floor",
     open: "Expand",
-    spoilOn: "Spoilers shown", spoilOff: "Spoilers hidden", spoilTap: "Tap to reveal",
+    spoilOn: "Showing spoilers", spoilOff: "Spoilers hidden", spoilTap: "Tap to reveal",
     lead: "From Floor 5 of an abandoned sealing facility down to its heart. Smash pots, grab junk guns, and wire your gear into combos of your own in this top-down roguelike shooter.",
     wishlist: "Wishlist on Steam", soon: "COMING SOON TO STEAM", browse: "Browse the codex",
     explore: "What are you looking for?", exploreSub: "Everything in the game, in one place. Open an entry to see the details and what pairs well with it.",
@@ -82,7 +82,7 @@ const UI = {
     health: "Health", active: "Active", passive: "Passive", cooldown: "Cooldown", startWeapon: "Starting weapon", unlock: "Unlock",
     hp: n => `HP ${n}`, ownerOf: "Master of", talismans: "Talismans", talismansSub: "Talismans stuck around the Seal Altar floor. Pick one up and throw it to unleash it.",
     worldSub: "A five-floor facility built long ago to seal away mighty beings and dangerous weapons.",
-    heroesSub: "You start with the Salvager. The others join once you meet their conditions in game.",
+    heroesSub: "You start with the Salvager. The others join once you meet their conditions in game.", heroesSubBase: "The one who descends into the sealed facility.",
     weaponsSub: "Weapons from pots and shops. Higher rarities are rarer.",
     itemsSub: "Passive items that kick in as soon as you pick them up.",
     synSub: "Hidden effects that switch on when you own a specific pair.",
@@ -112,8 +112,31 @@ const tierColor = t => (D.tiers[t] || {}).color || "#ccc";
 const sortKey = x => tx(x.name);
 const byTier = (a, b) => a.tier - b.tier || sortKey(a).localeCompare(sortKey(b), state.lang);
 
-const PAGES = ["heroes", "weapons", "items", "synergies", "tags", "enemies", "bosses", "npcs", "world"];
-const COUNTS = { npcs: D.npcs.length + D.rooms.length, heroes: D.heroes.length, weapons: D.weapons.length, items: D.items.length, synergies: D.synergies.length, enemies: D.enemies.length, bosses: D.bosses.length };
+// 스포일러: 가림이 켜져 있으면(처음 기본) 아래 것들은 처음부터 없던 것처럼 목록·개수·메뉴에서 빠진다.
+//   지하층(숨겨진 숲)과 그 몬스터, 기본 캐릭터(회수자) 말고 다른 캐릭터와 그 전용 시너지, 이벤트방과 NPC(메뉴째),
+//   이벤트방에서만 나오는 몬스터(미믹·그림자 분신), 전설 장비와 무피격 보상, 그것이 들어간 시너지
+const BASE_HERO = "salvager";
+const EVENT_ENEMIES = ["mimic", "shadow"];
+let S = D;
+function computeShown() {
+  const all = state.spoil;
+  const weapons = D.weapons.filter(x => all || x.tier < LEGEND);
+  const items = D.items.filter(x => all || x.tier < LEGEND);
+  const heroes = D.heroes.filter(h => all || h.id === BASE_HERO);
+  const gear = new Set([...weapons, ...items].map(x => x.id));
+  const heroIds = new Set(heroes.map(h => "hero:" + h.id));
+  const ok = id => id.startsWith("hero:") ? heroIds.has(id) : gear.has(id);
+  S = {
+    weapons, items, heroes, gear,
+    enemies: D.enemies.filter(e => all || !(e.secret || EVENT_ENEMIES.includes(e.id))),
+    synergies: D.synergies.filter(s => ok(s.a) && ok(s.b)),
+    floors: D.floors.filter(f => all || !f.secret),
+    common: (D.common || []).filter(c => all || !c.secret),
+    npcs: all ? D.npcs : [], rooms: all ? D.rooms : [],
+  };
+}
+const pages = () => ["heroes", "weapons", "items", "synergies", "tags", "enemies", "bosses", ...(state.spoil ? ["npcs"] : []), "world"];
+const counts = () => ({ npcs: S.npcs.length + S.rooms.length, heroes: S.heroes.length, weapons: S.weapons.length, items: S.items.length, synergies: S.synergies.length, enemies: S.enemies.length, bosses: D.bosses.length });
 
 // ---------------------------------------------------------------- 공통 조각
 
@@ -148,7 +171,7 @@ function synHTML(s) {
   return `<div class="syn"><div class="pair">${pieceHTML(s.a)}<span class="plus">+</span>${pieceHTML(s.b)}</div>
     <div><b>${esc(tx(s.name))}</b><span class="d">${esc(tx(s.description))}</span></div></div>`;
 }
-const synsOf = id => D.synergies.filter(s => s.a === id || s.b === id);
+const synsOf = id => S.synergies.filter(s => s.a === id || s.b === id);
 
 function weaponMeta(w) {
   const u = L();
@@ -164,7 +187,7 @@ function pageHead(key, sub) {
 
 function filtersHTML(withTier) {
   const u = L();
-  const tiers = withTier ? `<select class="sel" id="tier" aria-label="${esc(u.allTiers)}"><option value="">${esc(u.allTiers)}</option>${D.tiers.map((t, i) => `<option value="${i}"${state.tier === String(i) ? " selected" : ""}>${esc(tx(t.name))}</option>`).join("")}</select>` : "";
+  const tiers = withTier ? `<select class="sel" id="tier" aria-label="${esc(u.allTiers)}"><option value="">${esc(u.allTiers)}</option>${D.tiers.map((t, i) => i >= LEGEND && !state.spoil ? "" : `<option value="${i}"${state.tier === String(i) ? " selected" : ""}>${esc(tx(t.name))}</option>`).join("")}</select>` : "";
   return `<div class="filters"><div class="wrap" style="display:grid;gap:10px">
     <div class="frow"><input class="search" id="q" type="search" placeholder="${esc(u.search)}" aria-label="${esc(u.search)}" value="${esc(state.q)}">${tiers}<span class="count" id="shown"></span></div>
     <div class="chips">${D.tags.map(t => tagChip(t.id, true)).join("")}</div></div></div>`;
@@ -186,17 +209,17 @@ function home() {
   const u = L();
   const pick = (list, n) => list.filter(x => x.tier < LEGEND).slice(0, 400).sort((a, b) => b.tier - a.tier).slice(0, n);
   const tileIcons = {
-    heroes: D.heroes.slice(0, 3).map(h => h.icon), weapons: pick(D.weapons, 3).map(w => w.icon), items: pick(D.items, 3).map(i => i.icon),
-    synergies: [], tags: D.tags.slice(0, 3).map(t => t.icon), enemies: D.enemies.filter(e => !e.secret).slice(9, 12).map(e => e.icon), bosses: [D.bosses[0].icon],
-    npcs: D.npcs.filter(n => !n.secret).slice(0, 3).map(n => n.icon),
+    heroes: S.heroes.slice(0, 3).map(h => h.icon), weapons: pick(S.weapons, 3).map(w => w.icon), items: pick(S.items, 3).map(i => i.icon),
+    synergies: [], tags: D.tags.slice(0, 3).map(t => t.icon), enemies: S.enemies.filter(e => !e.secret).slice(9, 12).map(e => e.icon), bosses: [D.bosses[0].icon],
+    npcs: S.npcs.filter(n => !n.secret).slice(0, 3).map(n => n.icon),
   };
-  const tiles = ["heroes", "weapons", "items", "synergies", "tags", "enemies", "bosses", "npcs"].map(k => `
+  const tiles = pages().filter(k => k !== "world").map(k => `
     <a class="tile" href="#/${k}"><span class="icons">${(tileIcons[k] || []).map(s => `<img class="px" src="${s}" alt="">`).join("")}</span>
-      <h3>${esc(u[k])}</h3><span class="n">${k === "tags" ? D.tags.length : COUNTS[k]}</span><p>${esc(u["t_" + k])}</p></a>`).join("");
+      <h3>${esc(u[k])}</h3><span class="n">${k === "tags" ? D.tags.length : counts()[k]}</span><p>${esc(u["t_" + k])}</p></a>`).join("");
   const steam = STEAM_URL
     ? `<a class="btn main" href="${STEAM_URL}" target="_blank" rel="noopener">${esc(u.wishlist)}</a>`
     : `<span class="btn main" aria-disabled="true">${esc(u.wishlist)}</span>`;
-  const strip = ["weapons", "items", "synergies", "heroes", "enemies", "bosses"].map(k => `<a href="#/${k}"><b>${COUNTS[k]}</b><span>${esc(u[k])}</span></a>`).join("");
+  const strip = ["weapons", "items", "synergies", "heroes", "enemies", "bosses"].map(k => `<a href="#/${k}"><b>${counts()[k]}</b><span>${esc(u[k])}</span></a>`).join("");
   return `
   <section class="hero">
     <video class="hero-bg" autoplay muted loop playsinline preload="auto" poster="img/ui/title_bg.png" aria-hidden="true" tabindex="-1">
@@ -215,7 +238,7 @@ function home() {
 
 function floorList() {
   const u = L();
-  const floors = D.floors.map(f => {
+  const floors = S.floors.map(f => {
     const hidden = isHidden("floor:" + f.number, f.secret);
     const bosses = D.bosses.filter(b => b.floor === f.number);
     const open = state.openFloors.has(f.number) && !hidden;
@@ -231,7 +254,7 @@ function floorList() {
       return `<a class="mini" href="#/enemies"><img class="px" src="${e.icon}" alt=""${hid ? ' style="filter:brightness(0) drop-shadow(0 0 1px #8a7f98)"' : ""}><span>${hid ? "???" : esc(tx(e.name))}</span></a>`;
     }).join("");
     const masters = bosses.map(b => `<a class="mini" href="#/bosses"><img class="px" src="${b.icon}" alt=""><span>${esc(tx(b.name))}<i>${"★".repeat(b.stars)}</i></span></a>`).join("");
-    const legend = f.legend && W[f.legend] ? `<div class="fsec"><h4>${esc(u.floorLegend)}</h4><div class="members">${pieceHTML(f.legend)}</div></div>` : "";
+    const legend = f.legend && S.gear.has(f.legend) ? `<div class="fsec"><h4>${esc(u.floorLegend)}</h4><div class="members">${pieceHTML(f.legend)}</div></div>` : "";
     return `<details class="floor" data-floor="${f.number}"${open ? " open" : ""}>${head}
       <div class="floor-body">
         ${feats ? `<div class="fsec"><h4>${esc(u.floorFeatures)}</h4><ul class="feats">${feats}</ul></div>` : ""}
@@ -240,14 +263,14 @@ function floorList() {
         ${legend}
       </div></details>`;
   }).join("");
-  const common = (D.common || []).map(x => { const [t, d] = x[state.lang] || x.ko; return `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`; }).join("");
+  const common = S.common.map(x => { const [t, d] = x[state.lang] || x.ko; return `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`; }).join("");
   return `<div class="floors">${floors}</div>
     ${common ? `<div class="common"><h4>${esc(u.common)}</h4><ul class="feats">${common}</ul></div>` : ""}`;
 }
 
 function gearPage(kind) {
   const isW = kind === "weapons";
-  const list = (isW ? D.weapons : D.items).slice().sort(byTier);
+  const list = (isW ? S.weapons : S.items).slice().sort(byTier);
   const u = L();
   const shown = list.filter(x => matches(x, gearHidden(x, isW ? "w" : "i")));
   const cards = shown.map(x => {
@@ -291,7 +314,7 @@ function synergiesPage() {
   const u = L();
   let total = 0;
   const out = ["wi", "ii", "ww", "upgrade", "hero"].map(k => {
-    const list = D.synergies.filter(s => synKind(s) === k && synMatches(s));
+    const list = S.synergies.filter(s => synKind(s) === k && synMatches(s));
     total += list.length;
     if (!list.length) return "";
     const [title, note] = u["g_" + k];
@@ -317,8 +340,8 @@ function tagsPage() {
   const tags = state.tags.size ? D.tags.filter(t => state.tags.has(t.id)) : D.tags;
   const body = tags.map(t => {
     const sets = D.tag_sets.filter(s => s.tag === t.id).sort((a, b) => a.need - b.need);
-    const ws = D.weapons.filter(w => w.tags.includes(t.id) && matches(w, gearHidden(w, "w"))).sort(byTier);
-    const is = D.items.filter(i => i.tags.includes(t.id) && matches(i, gearHidden(i, "i"))).sort(byTier);
+    const ws = S.weapons.filter(w => w.tags.includes(t.id) && matches(w, gearHidden(w, "w"))).sort(byTier);
+    const is = S.items.filter(i => i.tags.includes(t.id) && matches(i, gearHidden(i, "i"))).sort(byTier);
     return `<section class="tagsec" style="--c:${t.color}">
       <header>${t.icon ? `<img class="px" src="${t.icon}" alt="">` : ""}<h2>${esc(tx(t.name))}</h2><span class="count">${esc(u.members(ws.length, is.length))}</span></header>
       <div class="steps">${sets.map(s => `<div class="step${s.power ? " power" : ""}"><span class="n">${esc(u.need(s.need))}${s.power ? " · " + esc(u.power) : ""}</span><b>${esc(tx(s.name))}</b><span>${esc(tx(s.description).replace(/^\[[^\]]+\]\s*/, ""))}</span></div>`).join("")}</div>
@@ -329,7 +352,7 @@ function tagsPage() {
 
 function heroesPage() {
   const u = L();
-  const cards = D.heroes.map(h => {
+  const cards = S.heroes.map(h => {
     const w = W[h.start_weapon];
     return `<article class="hero-card"><div class="portrait"><img class="px" src="${h.icon}" alt=""></div>
       <div><h3>${esc(tx(h.name))}</h3><div class="title">${esc(tx(h.title))}</div>
@@ -342,8 +365,8 @@ function heroesPage() {
         ${h.unlock ? `<div class="lock">🔒 ${esc(tx(h.unlock))}</div>` : ""}
       </div></article>`;
   }).join("");
-  const synHero = D.synergies.filter(s => synKind(s) === "hero");
-  return pageHead("heroes", u.heroesSub) + `<div class="wrap"><div class="heroes">${cards}</div>
+  const synHero = S.synergies.filter(s => synKind(s) === "hero");
+  return pageHead("heroes", state.spoil ? u.heroesSub : u.heroesSubBase) + `<div class="wrap"><div class="heroes">${cards}</div>
     ${synHero.length ? `<section class="group" style="margin-top:34px"><h2>${esc(u.g_hero[0])}</h2><p>${esc(u.g_hero[1])}</p><div class="syns">${synHero.map(synHTML).join("")}</div></section>` : ""}</div>`;
 }
 
@@ -359,12 +382,12 @@ function mobCard(e, key, secret, extra) {
 
 function enemiesPage() {
   const u = L();
-  return pageHead("enemies", u.enemiesSub) + `<div class="wrap"><div class="mobs">${D.enemies.map(e => mobCard(e, "e:" + e.id, e.secret)).join("")}</div></div>`;
+  return pageHead("enemies", u.enemiesSub) + `<div class="wrap"><div class="mobs">${S.enemies.map(e => mobCard(e, "e:" + e.id, e.secret)).join("")}</div></div>`;
 }
 
 function bossesPage() {
   const u = L();
-  const body = D.floors.filter(f => f.number > 0).map(f => {
+  const body = S.floors.filter(f => f.number > 0).map(f => {
     const list = D.bosses.filter(b => b.floor === f.number);
     return `<section class="floor-block"><h2><span class="code">${f.code}</span>${esc(tx(f.name))}</h2><p>${esc(tx(f.description))}</p>
       <div class="mobs bosses">${list.map(b => mobCard(b, "b:" + b.id, false, `<span class="stars">${"★".repeat(b.stars)}</span>`)).join("")}</div></section>`;
@@ -374,7 +397,7 @@ function bossesPage() {
 
 function npcsPage() {
   const u = L();
-  const npcs = D.npcs.map(n => {
+  const npcs = S.npcs.map(n => {
     const hidden = isHidden("n:" + n.id, n.secret);
     const frames = (n.walk || []).length ? ` data-walk='${JSON.stringify([n.icon, ...n.walk])}'` : "";
     return `<article class="npc${hidden ? " spoiler" : ""}"${hidden ? ` data-reveal="n:${n.id}"` : ""}>
@@ -382,7 +405,7 @@ function npcsPage() {
       <div><h3>${hidden ? "???" : esc(tx(n.name))}</h3><span class="where">${esc(u.where)} · ${hidden ? "???" : esc(tx(n.where))}</span>
         <p>${hidden ? esc(u.spoilTap) : esc(tx(n.description))}</p></div></article>`;
   }).join("");
-  const rooms = D.rooms.map(r => `<div class="tali" style="--c:var(--seal)"><img class="px" src="${r.icon}" alt=""><div><b>${esc(tx(r.name))}</b><span>${esc(tx(r.description))}</span></div></div>`).join("");
+  const rooms = S.rooms.map(r => `<div class="tali" style="--c:var(--seal)"><img class="px" src="${r.icon}" alt=""><div><b>${esc(tx(r.name))}</b><span>${esc(tx(r.description))}</span></div></div>`).join("");
   return pageHead("npcs", u.npcsSub) + `<div class="wrap">
     <section class="group"><h2>${esc(u.npcTitle)}</h2><div class="npcs">${npcs}</div></section>
     <section class="group"><h2>${esc(u.roomTitle)}</h2><div class="talis">${rooms}</div></section></div>`;
@@ -400,10 +423,9 @@ function worldPage() {
 function detail(kind, id) {
   const isW = kind === "weapons";
   const x = (isW ? W : I)[id];
-  if (!x) return false;
+  if (!x || !S.gear.has(id)) return false;  // 스포일러 가림 중이면 없는 것처럼
   const u = L();
   const key = (isW ? "w:" : "i:") + id;
-  state.revealed.add(key); // 주소로 직접 들어왔으면 보여 준다
   const syns = synsOf(id);
   const sets = x.tags.map(t => D.tag_sets.filter(s => s.tag === t).sort((a, b) => a.need - b.need)[0]).filter(Boolean);
   const stat = (k, v) => `<div><small>${esc(u[k])}</small><b>${esc(v)}</b></div>`;
@@ -440,8 +462,9 @@ function detail(kind, id) {
 
 let lastPage = "";
 function route() {
+  computeShown();
   const [, page = "", id = ""] = location.hash.replace(/^#/, "").split("/");
-  const name = PAGES.includes(page) ? page : "";
+  const name = pages().includes(page) ? page : "";
   const dlg = document.getElementById("dlg");
   // 같은 목록 위에서 자세히 보기만 열고 닫을 때는 목록을 다시 그리지 않는다 (스크롤 유지)
   if (name !== lastPage || !id) {
@@ -488,12 +511,12 @@ function bindPage() {
 function chrome() {
   const u = L();
   document.documentElement.lang = state.lang;
-  document.getElementById("links").innerHTML = PAGES.map(p => `<a href="#/${p}" data-page="${p}">${esc(u[p])}</a>`).join("");
+  document.getElementById("links").innerHTML = pages().map(p => `<a href="#/${p}" data-page="${p}">${esc(u[p])}</a>`).join("");
   document.querySelectorAll("[data-ui]").forEach(el => { el.textContent = u[el.dataset.ui]; });
   document.getElementById("lang").textContent = state.lang === "ko" ? "EN" : "한국어";
   const sp = document.getElementById("spoil");
   sp.textContent = state.spoil ? u.spoilOn : u.spoilOff;
-  sp.setAttribute("aria-pressed", state.spoil);
+  sp.setAttribute("aria-pressed", !state.spoil);  // 가림이 켜진 상태가 눌린 모양 (처음 기본)
 }
 
 // 걷기 그림 돌리기: 몬스터·보스 페이지에서만, 마우스를 올린 카드만 (움직임 줄이기 설정이면 안 돌린다)

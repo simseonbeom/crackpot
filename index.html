@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CRACKPOT 도감</title>
+<meta name="description" content="CRACKPOT 의 무기·아이템·시너지·캐릭터·몬스터·보스를 모은 공식 도감">
+<meta property="og:title" content="CRACKPOT 도감">
+<meta property="og:description" content="깨진 항아리 속에서 찾은 모든 것">
+<meta property="og:image" content="img/ui/title_bg.png">
+<link rel="icon" href="img/ui/jar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&family=Silkscreen&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#view">본문으로</a>
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="#/"><img src="img/ui/logo.png" alt="CRACKPOT" width="140" height="30"><small data-ui="codex">도감</small></a>
+    <nav class="links" id="links" aria-label="도감 메뉴"></nav>
+    <div class="nav-tools">
+      <button class="pill" id="spoil" type="button" aria-pressed="false"></button>
+      <button class="pill" id="lang" type="button" aria-label="Language">EN</button>
+      <button class="pill menu-btn" id="menu" type="button" aria-expanded="false" aria-controls="links">☰</button>
+    </div>
+  </div>
+</header>
+
+<main id="view" tabindex="-1"></main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <span><b>CRACKPOT</b> · <span data-ui="foot"></span></span>
+    <span class="dim" data-ui="foot2"></span>
+  </div>
+</footer>
+
+<dialog id="dlg" aria-labelledby="dlg-title"><div class="dlg" id="dlgbody"></div></dialog>
+
+<script src="data/codex.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
